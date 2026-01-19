@@ -20,9 +20,21 @@
         .opt-btn:hover:not(:disabled) { border-color: #10b981; background: #ecfdf5; }
         .correct { background: #d1fae5 !important; border-color: #10b981 !important; color: #065f46; }
         .wrong { background: #fee2e2 !important; border-color: #ef4444 !important; color: #991b1b; }
+        
+        /* تصميم الإشعار الاحترافي */
+        #toast-notification {
+            transform: translateY(-150%);
+            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        #toast-notification.show { transform: translateY(0); }
     </style>
 </head>
 <body class="text-slate-800 pb-24">
+
+    <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold min-w-[300px] justify-center">
+        <i id="toast-icon" class="text-xl"></i>
+        <span id="toast-msg"></span>
+    </div>
 
     <div id="loading" class="fixed inset-0 bg-white z-[999] flex flex-col items-center justify-center">
         <div class="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -190,7 +202,7 @@
             score: 0, 
             qIdx: 0, 
             timerInterval: null,
-            pendingAction: null // لتذكر الإجراء المعلق (مثل فتح اختبار مغلق)
+            pendingAction: null
         };
 
         const app = {
@@ -200,6 +212,16 @@
                     if(snap.val()) db = snap.val();
                     app.renderUI();
                 });
+            },
+            notify: (msg, type='success') => {
+                const t = document.getElementById('toast-notification');
+                const i = document.getElementById('toast-icon');
+                const m = document.getElementById('toast-msg');
+                t.className = `fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold min-w-[300px] justify-center transition-all duration-300 ${type==='error'?'bg-red-600':'bg-emerald-600'}`;
+                i.className = type==='error' ? 'fas fa-exclamation-circle' : 'fas fa-check-circle';
+                m.innerText = msg;
+                t.classList.add('show');
+                setTimeout(() => t.classList.remove('show'), 3000);
             },
             renderUI: () => {
                 const s = db.settings || {};
@@ -211,7 +233,6 @@
                 for(let k in els) if(document.getElementById(k)) document.getElementById(k).innerText = els[k] || "";
                 document.getElementById('phone-link').href = `https://wa.me/${s.whatsapp}`;
                 
-                // Show Tutorials correctly
                 if(s.tutorialText && s.tutorialText.trim() !== "") {
                     document.getElementById('ui-tutorial-box').classList.remove('hidden');
                     document.getElementById('ui-tutorial-text').innerText = s.tutorialText;
@@ -222,9 +243,8 @@
                 if(s.extLinkUrl) { document.getElementById('ui-ext-link-area').classList.remove('hidden'); document.getElementById('ui-ext-link').href = s.extLinkUrl; }
                 if(s.appLink) { document.getElementById('app-banner').classList.remove('hidden'); document.getElementById('ui-app-link').href = s.appLink; }
                 
-                app.renderSims(); // Helper to render simulations
+                app.renderSims();
                 
-                // Only go to landing if not already deep in the app
                 if(document.querySelectorAll('.view-section.hidden').length === document.querySelectorAll('.view-section').length) {
                     app.showSection('landing');
                 }
@@ -255,7 +275,7 @@
                 app.showSection('dashboard'); 
             },
             enterSubscriber: () => {
-                state.pendingAction = null; // Reset pending action on direct login
+                state.pendingAction = null; 
                 document.getElementById('password-modal').classList.remove('hidden');
             },
             checkPassword: () => {
@@ -266,15 +286,13 @@
                     state.isVIP = true;
                     document.getElementById('password-modal').classList.add('hidden');
                     app.updateStatus();
-                    alert("تم تفعيل الاشتراك بنجاح! 🔓");
+                    app.notify("تم تفعيل الاشتراك بنجاح! 🔓");
                     
-                    // Re-render UI components to remove locks visual
                     app.renderSims();
                     if(!document.getElementById('content-list').classList.contains('hidden')) {
                          app.selectMinor(state.minor);
                     }
 
-                    // EXECUTE PENDING ACTION OR GO TO DASHBOARD
                     if(state.pendingAction) {
                         state.pendingAction();
                         state.pendingAction = null;
@@ -283,7 +301,7 @@
                     }
 
                 } else {
-                    alert("كلمة المرور غير صحيحة");
+                    app.notify("كلمة المرور غير صحيحة", "error");
                 }
             },
             updateStatus: () => document.getElementById('user-status').innerText = state.isVIP ? "مشترك VIP 👑" : "زائر (محدود)",
@@ -293,7 +311,6 @@
                 document.getElementById('list-title').innerText = m === 'تخصص' ? `تخصص ${state.major}` : m;
                 const isUniversal = ['تربوي', 'جدارات', 'IQ', 'عربي للجميع', 'انجليزي للجميع', 'معلومات عامة'].includes(m);
                 
-                // FILES
                 const files = (db.files||[]).filter(f => {
                     if(state.major==='Competition') return f.major==='Competition';
                     if(isUniversal) return f.minor===m;
@@ -308,7 +325,6 @@
                     }).join('');
                 } else fBox.classList.add('hidden');
 
-                // QUIZZES
                 const qBox = document.getElementById('quizzes-box');
                 if(state.major==='Competition') qBox.classList.add('hidden');
                 else {
@@ -344,7 +360,7 @@
                     return;
                 }
                 const q = db.quizzes.find(x => x.id === id);
-                if(!q.questions || !q.questions.length) return alert("الاختبار فارغ");
+                if(!q.questions || !q.questions.length) return app.notify("الاختبار فارغ", "error");
                 state.quiz = q; state.score = 0; state.qIdx = 0;
                 document.getElementById('timer-display').classList.add('hidden');
                 app.showSection('exam-player'); app.renderQ();
@@ -373,7 +389,7 @@
                     if(pool[key]) finalQs.push(...shuffle(pool[key]).slice(0, sim.counts[k]||0));
                 });
                 
-                if(!finalQs.length) return alert("لا توجد أسئلة كافية لإنشاء هذا المحاكي");
+                if(!finalQs.length) return app.notify("لا توجد أسئلة كافية لإنشاء هذا المحاكي", "error");
                 state.quiz = { questions: shuffle(finalQs) }; state.score = 0; state.qIdx = 0;
                 app.startTimer(sim.time);
                 app.showSection('exam-player'); app.renderQ();
@@ -384,7 +400,7 @@
                 if(state.timerInterval) clearInterval(state.timerInterval);
                 state.timerInterval = setInterval(() => {
                     d.innerText = `${Math.floor(t/60)}:${t%60<10?'0'+t%60:t%60}`;
-                    if(t-- <= 0) { clearInterval(state.timerInterval); alert("انتهى الوقت"); app.finishExam(); }
+                    if(t-- <= 0) { clearInterval(state.timerInterval); app.notify("انتهى الوقت", "error"); app.finishExam(); }
                 }, 1000);
             },
             renderQ: () => {
