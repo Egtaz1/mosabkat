@@ -1,15 +1,32 @@
 <!doctype html>
-<html lang="ar" dir="rtl"> 
- <head> 
-  <meta charset="UTF-8"> 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
-  <title>المنصة التعليمية | لغتي هويتي</title> 
-  <script src="https://cdn.tailwindcss.com"></script> 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script> 
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script> 
-  <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المنصة التعليمية |مسابقات التنظيم والإدارة </title>
+
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Cairo', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&amp;display=swap" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
         body { font-family: 'Cairo', sans-serif; background-color: #f4f7f6; user-select: none; }
         .hidden { display: none !important; }
         .modal-animate { animation: slideUp 0.4s ease-out; }
@@ -24,113 +41,171 @@
         #toast-notification.show { transform: translateY(0); }
         .review-card.correct-ans { border-right: 6px solid #10b981; background: #f0fdf4; }
         .review-card.wrong-ans { border-right: 6px solid #ef4444; background: #fef2f2; }
-    </style> 
- </head> 
- <body class="text-slate-800 pb-24"> 
-  <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold min-w-[300px] justify-center"> <i id="toast-icon" class="text-xl"></i> <span id="toast-msg"></span> 
-  </div> 
-  <div id="loading" class="fixed inset-0 bg-white z-[999] flex flex-col items-center justify-center"> 
-   <div class="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div> 
-   <p class="font-bold text-slate-500">جاري التحميل...</p> 
-  </div> 
-  <div id="app-banner" class="hidden p-3 bg-gradient-to-r from-blue-900 to-blue-700 text-white sticky top-0 z-50 shadow-lg"> 
-   <div class="container mx-auto flex justify-between items-center px-4"> <span class="font-bold text-xs md:text-sm" id="ui-app-text"></span> <a id="ui-app-link" href="#" target="_blank" class="bg-yellow-400 text-blue-900 px-4 py-1 rounded-full text-xs font-black">تحميل</a> 
-   </div> 
-  </div> 
-  <nav class="bg-white border-b-4 border-emerald-500 p-4 shadow-sm relative z-40"> 
-   <div class="container mx-auto flex justify-between items-center"> 
-    <h1 class="text-xl md:text-2xl font-black text-emerald-800 cursor-pointer" onclick="location.reload()"> <i class="fas fa-graduation-cap"></i> <span id="ui-site-name">المنصة</span> </h1> 
-   </div> 
-  </nav> 
-  <main class="container mx-auto px-4 py-8 space-y-8"> 
-   <section id="landing" class="view-section hidden space-y-10"> 
-    <div class="text-center space-y-3"> 
-     <h2 class="text-4xl md:text-6xl font-black text-slate-900" id="ui-hero-title"></h2> 
-     <p class="text-slate-500 font-bold text-xl" id="ui-hero-desc"></p> 
-    </div> 
-    <div id="ui-tutorial-box" class="hidden bg-blue-50 border-r-8 border-blue-600 p-6 rounded-2xl max-w-3xl mx-auto shadow-sm"> 
-     <p id="ui-tutorial-text" class="font-bold text-slate-700 leading-relaxed"></p> 
-    </div> 
-    <div id="ui-ext-link-area" class="hidden text-center"> <a id="ui-ext-link" href="#" target="_blank" class="inline-flex items-center gap-2 bg-yellow-400 text-slate-900 px-8 py-3 rounded-full font-black shadow-lg hover:scale-105 transition-all"> <i class="fas fa-link"></i> <span id="ui-ext-text"></span> </a> 
-    </div> 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto"> 
-     <div onclick="app.enterVisitor()" class="bg-white p-8 rounded-[2.5rem] shadow-xl border-b-[8px] border-slate-300 cursor-pointer hover:-translate-y-2 transition-all text-center"> <i class="fas fa-user text-5xl text-slate-400 mb-4"></i> 
-      <h3 class="text-2xl font-black text-slate-700" id="ui-btn-vis">دخول كزائر</h3> 
-     </div> 
-     <div onclick="app.enterSubscriber()" class="bg-white p-8 rounded-[2.5rem] shadow-xl border-b-[8px] border-emerald-500 cursor-pointer hover:-translate-y-2 transition-all text-center"> <i class="fas fa-crown text-5xl text-emerald-500 mb-4"></i> 
-      <h3 class="text-2xl font-black text-emerald-700" id="ui-btn-sub">دخول المشتركين</h3> 
-     </div> 
-    </div> 
-   </section> 
-   <section id="dashboard" class="view-section hidden space-y-8"> 
-    <div class="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center"> <button onclick="app.showSection('landing')" class="bg-slate-100 px-4 py-2 rounded-xl font-bold text-xs text-slate-500">خروج</button> <span id="user-status" class="font-black text-xs"></span> 
-    </div> 
-    <div id="simulations-list" class="space-y-4"></div> 
-    <div class="text-center"> 
-     <h2 class="text-3xl font-black text-slate-800">الأقسام الرئيسية</h2> 
-    </div> 
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-5"> <button onclick="app.selectMajor('Competition')" class="col-span-2 md:col-span-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white p-6 rounded-3xl shadow-lg border-b-8 border-orange-800 hover:scale-[1.01] transition-all flex items-center justify-center gap-3"> <i class="fas fa-trophy text-3xl text-yellow-200"></i> 
-      <div class="text-right"> <span class="block font-black text-xl">مسابقات وملفات عامة</span> 
-      </div> </button> <button onclick="app.selectMajor('لغة عربية')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-emerald-500 font-black text-lg hover:-translate-y-1 transition-all">لغة عربية</button> <button onclick="app.selectMajor('رياضيات')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-blue-600 font-black text-lg hover:-translate-y-1 transition-all">رياضيات</button> <button onclick="app.selectMajor('علوم')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-purple-600 font-black text-lg hover:-translate-y-1 transition-all">علوم</button> <button onclick="app.selectMajor('دراسات')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-amber-500 font-black text-lg hover:-translate-y-1 transition-all">دراسات</button> <button onclick="app.selectMajor('لغة إنجليزية')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-rose-500 font-black text-lg hover:-translate-y-1 transition-all">English</button> 
-    </div> 
-   </section> 
-   <section id="sub-dashboard" class="view-section hidden space-y-6"> 
-    <div class="flex justify-between items-center mb-4"> <button onclick="app.showSection('dashboard')" class="text-blue-600 font-bold text-sm">تغيير القسم</button> 
-     <h3 id="major-title" class="font-black text-xl"></h3> 
-    </div> 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> <button onclick="app.selectMinor('تخصص')" class="md:col-span-2 lg:col-span-3 p-8 bg-slate-800 text-white rounded-3xl shadow-xl border-r-[8px] border-yellow-400 flex justify-between items-center hover:bg-slate-900 transition-all"> 
-      <div class="text-right"> 
-       <h4 class="text-2xl font-black mb-1">أسئلة التخصص</h4> 
-      </div><i class="fas fa-star text-4xl text-yellow-400"></i> </button> <button onclick="app.selectMinor('تربوي')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">التربوي</button> <button onclick="app.selectMinor('جدارات')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">الجدارات</button> <button onclick="app.selectMinor('IQ')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">IQ والذكاء</button> <button onclick="app.selectMinor('عربي للجميع')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">عربي للجميع</button> <button onclick="app.selectMinor('انجليزي للجميع')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">انجليزي للجميع</button> <button onclick="app.selectMinor('حاسب آلي')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50 text-blue-700">حاسب آلي</button> <button onclick="app.selectMinor('معلومات عامة')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">معلومات عامة</button> 
-    </div> 
-   </section> 
-   <section id="content-list" class="view-section hidden space-y-8"> 
-    <div class="flex justify-between items-center mb-4"> <button onclick="app.showSection('sub-dashboard')" class="bg-slate-200 px-4 py-2 rounded-xl font-bold text-sm">رجوع</button> 
-     <h3 id="list-title" class="font-black text-lg text-emerald-800"></h3> 
-    </div> 
-    <div id="files-box" class="hidden"> 
-     <h4 class="font-black text-red-600 mb-3 flex items-center gap-2"><i class="fas fa-folder-open"></i> الملفات:</h4> 
-     <div id="files-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div> 
-    </div> 
-    <div id="quizzes-box"> 
-     <h4 class="font-black text-blue-600 mb-3 flex items-center gap-2"><i class="fas fa-list-check"></i> الاختبارات:</h4> 
-     <div id="quizzes-grid" class="space-y-4"></div> 
-    </div> 
-   </section> 
-   <section id="exam-player" class="view-section hidden max-w-2xl mx-auto space-y-6"> 
-    <div class="bg-white p-4 rounded-3xl shadow-lg border-t-8 border-emerald-500 sticky top-20 z-30"> 
-     <div class="flex justify-between mb-2"> <span id="timer-display" class="font-black text-red-500 text-lg hidden">00:00</span> <span id="progress-text" class="text-xs font-black text-emerald-600"></span> <button onclick="location.reload()" class="text-xs font-bold text-red-400">خروج</button> 
-     </div> 
-     <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden"> 
-      <div id="progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div> 
-     </div> 
-    </div> 
-    <div id="question-box"></div> 
-    <div id="result-box" class="hidden text-center space-y-6"> 
-     <div class="bg-white p-10 rounded-[3rem] shadow-2xl border-t-[10px] border-emerald-600"> <i class="fas fa-award text-6xl text-yellow-400 mb-6 block animate-bounce"></i> 
-      <h2 class="text-3xl font-black mb-2">نتيجة الاختبار</h2> 
-      <p id="res-score" class="text-6xl font-black text-slate-800 mb-4"></p> 
-      <p id="res-msg" class="text-xl font-bold text-emerald-600 mb-8"></p> <button onclick="location.reload()" class="bg-slate-900 text-white px-8 py-3 rounded-full font-black shadow-lg hover:bg-black">خروج للقائمة</button> 
-     </div> 
-     <div class="text-right"> 
-      <h3 class="font-black text-xl text-slate-700 mb-4 border-r-4 border-blue-500 pr-3">مراجعة الإجابات:</h3> 
-      <div id="review-list" class="space-y-4"> 
-      </div> 
-     </div> 
-    </div> 
-   </section> 
-  </main> 
-  <footer class="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-between items-center px-6"> 
-   <p id="footer-text" class="text-xs font-bold text-slate-400"></p> <a id="phone-link" href="#" class="flex items-center gap-2 text-emerald-600 font-black"> <span id="phone-display"></span> <i class="fab fa-whatsapp text-xl"></i> </a> 
-  </footer> 
-  <div id="password-modal" class="fixed inset-0 bg-slate-900/95 backdrop-blur hidden z-[100] flex items-center justify-center p-4"> 
-   <div class="bg-white p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl modal-animate"> <i class="fas fa-lock text-4xl text-emerald-500 mb-4"></i> 
-    <h3 class="text-2xl font-black mb-2">منطقة المشتركين</h3> 
-    <p class="text-slate-500 text-sm mb-6 font-bold">أدخل كود الاشتراك لفتح المحتوى</p> 
-    <input type="password" id="user-pass" class="w-full border-2 border-slate-200 p-4 rounded-xl text-center text-2xl font-black mb-4 outline-none focus:border-emerald-500"> <button onclick="app.checkPassword()" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-black shadow-lg">تفعيل</button> <button onclick="document.getElementById('password-modal').classList.add('hidden')" class="mt-4 text-slate-400 font-bold text-sm">إلغاء</button> 
-   </div> 
-  </div> 
-  <script>
+    </style>
+</head>
+<body class="text-slate-800 pb-24">
+    <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold min-w-[300px] justify-center">
+        <i id="toast-icon" class="text-xl"></i>
+        <span id="toast-msg"></span>
+    </div>
+
+    <div id="loading" class="fixed inset-0 bg-white z-[999] flex flex-col items-center justify-center">
+        <div class="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p class="font-bold text-slate-500">جاري التحميل...</p>
+    </div>
+
+    <div id="app-banner" class="hidden p-3 bg-gradient-to-r from-blue-900 to-blue-700 text-white sticky top-0 z-50 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center px-4">
+            <span class="font-bold text-xs md:text-sm" id="ui-app-text"></span>
+            <a id="ui-app-link" href="#" target="_blank" class="bg-yellow-400 text-blue-900 px-4 py-1 rounded-full text-xs font-black">تحميل</a>
+        </div>
+    </div>
+
+    <nav class="bg-white border-b-4 border-emerald-500 p-4 shadow-sm relative z-40">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl md:text-2xl font-black text-emerald-800 cursor-pointer" onclick="location.reload()">
+                <i class="fas fa-graduation-cap"></i> <span id="ui-site-name">المنصة</span>
+            </h1>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 py-8 space-y-8">
+        <section id="landing" class="view-section hidden space-y-10">
+            <div class="text-center space-y-3">
+                <h2 class="text-4xl md:text-6xl font-black text-slate-900" id="ui-hero-title"></h2>
+                <p class="text-slate-500 font-bold text-xl" id="ui-hero-desc"></p>
+            </div>
+            
+            <div id="ui-tutorial-box" class="hidden bg-blue-50 border-r-8 border-blue-600 p-6 rounded-2xl max-w-3xl mx-auto shadow-sm">
+                <p id="ui-tutorial-text" class="font-bold text-slate-700 leading-relaxed"></p>
+            </div>
+
+            <div id="ui-ext-link-area" class="hidden text-center">
+                <a id="ui-ext-link" href="#" target="_blank" class="inline-flex items-center gap-2 bg-yellow-400 text-slate-900 px-8 py-3 rounded-full font-black shadow-lg hover:scale-105 transition-all">
+                    <i class="fas fa-link"></i> <span id="ui-ext-text"></span>
+                </a>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                <div onclick="app.enterVisitor()" class="bg-white p-8 rounded-[2.5rem] shadow-xl border-b-[8px] border-slate-300 cursor-pointer hover:-translate-y-2 transition-all text-center">
+                    <i class="fas fa-user text-5xl text-slate-400 mb-4"></i>
+                    <h3 class="text-2xl font-black text-slate-700" id="ui-btn-vis">دخول كزائر</h3>
+                </div>
+                <div onclick="app.enterSubscriber()" class="bg-white p-8 rounded-[2.5rem] shadow-xl border-b-[8px] border-emerald-500 cursor-pointer hover:-translate-y-2 transition-all text-center">
+                    <i class="fas fa-crown text-5xl text-emerald-500 mb-4"></i>
+                    <h3 class="text-2xl font-black text-emerald-700" id="ui-btn-sub">دخول المشتركين</h3>
+                </div>
+            </div>
+        </section>
+
+        <section id="dashboard" class="view-section hidden space-y-8">
+            <div class="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center">
+                <button onclick="app.showSection('landing')" class="bg-slate-100 px-4 py-2 rounded-xl font-bold text-xs text-slate-500">خروج</button>
+                <span id="user-status" class="font-black text-xs"></span>
+            </div>
+
+            <div id="simulations-list" class="space-y-4"></div>
+
+            <div class="text-center">
+                <h2 class="text-3xl font-black text-slate-800">الأقسام الرئيسية</h2>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-5">
+                <button onclick="app.selectMajor('Competition')" class="col-span-2 md:col-span-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white p-6 rounded-3xl shadow-lg border-b-8 border-orange-800 hover:scale-[1.01] transition-all flex items-center justify-center gap-3">
+                    <i class="fas fa-trophy text-3xl text-yellow-200"></i>
+                    <div class="text-right"><span class="block font-black text-xl">مسابقات وملفات عامة</span></div>
+                </button>
+                <button onclick="app.selectMajor('لغة عربية')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-emerald-500 font-black text-lg hover:-translate-y-1 transition-all">لغة عربية</button>
+                <button onclick="app.selectMajor('رياضيات')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-blue-600 font-black text-lg hover:-translate-y-1 transition-all">رياضيات</button>
+                <button onclick="app.selectMajor('علوم')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-purple-600 font-black text-lg hover:-translate-y-1 transition-all">علوم</button>
+                <button onclick="app.selectMajor('دراسات')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-amber-500 font-black text-lg hover:-translate-y-1 transition-all">دراسات</button>
+                <button onclick="app.selectMajor('لغة إنجليزية')" class="bg-white p-6 rounded-3xl shadow border-b-8 border-rose-500 font-black text-lg hover:-translate-y-1 transition-all">English</button>
+            </div>
+        </section>
+
+        <section id="sub-dashboard" class="view-section hidden space-y-6">
+            <div class="flex justify-between items-center mb-4">
+                <button onclick="app.showSection('dashboard')" class="text-blue-600 font-bold text-sm">تغيير القسم</button>
+                <h3 id="major-title" class="font-black text-xl"></h3>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <button onclick="app.selectMinor('تخصص')" class="md:col-span-2 lg:col-span-3 p-8 bg-slate-800 text-white rounded-3xl shadow-xl border-r-[8px] border-yellow-400 flex justify-between items-center hover:bg-slate-900 transition-all">
+                    <div class="text-right"><h4 class="text-2xl font-black mb-1">أسئلة التخصص</h4></div><i class="fas fa-star text-4xl text-yellow-400"></i>
+                </button>
+                <button onclick="app.selectMinor('تربوي')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">التربوي</button>
+                <button onclick="app.selectMinor('جدارات')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">الجدارات</button>
+                <button onclick="app.selectMinor('IQ')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">IQ والذكاء</button>
+                <button onclick="app.selectMinor('عربي للجميع')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">عربي للجميع</button>
+                <button onclick="app.selectMinor('انجليزي للجميع')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">انجليزي للجميع</button>
+                <button onclick="app.selectMinor('حاسب آلي')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50 text-blue-700">حاسب آلي</button>
+                <button onclick="app.selectMinor('معلومات عامة')" class="p-5 bg-white rounded-2xl shadow font-bold hover:bg-slate-50">معلومات عامة</button>
+            </div>
+        </section>
+
+        <section id="content-list" class="view-section hidden space-y-8">
+            <div class="flex justify-between items-center mb-4">
+                <button onclick="app.showSection('sub-dashboard')" class="bg-slate-200 px-4 py-2 rounded-xl font-bold text-sm">رجوع</button>
+                <h3 id="list-title" class="font-black text-lg text-emerald-800"></h3>
+            </div>
+            <div id="files-box" class="hidden">
+                <h4 class="font-black text-red-600 mb-3 flex items-center gap-2"><i class="fas fa-folder-open"></i> الملفات:</h4>
+                <div id="files-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </div>
+            <div id="quizzes-box">
+                <h4 class="font-black text-blue-600 mb-3 flex items-center gap-2"><i class="fas fa-list-check"></i> الاختبارات:</h4>
+                <div id="quizzes-grid" class="space-y-4"></div>
+            </div>
+        </section>
+
+        <section id="exam-player" class="view-section hidden max-w-2xl mx-auto space-y-6">
+            <div class="bg-white p-4 rounded-3xl shadow-lg border-t-8 border-emerald-500 sticky top-20 z-30">
+                <div class="flex justify-between mb-2">
+                    <span id="timer-display" class="font-black text-red-500 text-lg hidden">00:00</span>
+                    <span id="progress-text" class="text-xs font-black text-emerald-600"></span>
+                    <button onclick="location.reload()" class="text-xs font-bold text-red-400">خروج</button>
+                </div>
+                <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="question-box"></div>
+
+            <div id="result-box" class="hidden text-center space-y-6">
+                <div class="bg-white p-10 rounded-[3rem] shadow-2xl border-t-[10px] border-emerald-600">
+                    <i class="fas fa-award text-6xl text-yellow-400 mb-6 block animate-bounce"></i>
+                    <h2 class="text-3xl font-black mb-2">نتيجة الاختبار</h2>
+                    <p id="res-score" class="text-6xl font-black text-slate-800 mb-4"></p>
+                    <p id="res-msg" class="text-xl font-bold text-emerald-600 mb-8"></p>
+                    <button onclick="location.reload()" class="bg-slate-900 text-white px-8 py-3 rounded-full font-black shadow-lg hover:bg-black">خروج للقائمة</button>
+                </div>
+                <div class="text-right">
+                    <h3 class="font-black text-xl text-slate-700 mb-4 border-r-4 border-blue-500 pr-3">مراجعة الإجابات:</h3>
+                    <div id="review-list" class="space-y-4"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50 flex justify-between items-center px-6">
+        <p id="footer-text" class="text-xs font-bold text-slate-400"></p>
+        <a id="phone-link" href="#" class="flex items-center gap-2 text-emerald-600 font-black">
+            <span id="phone-display"></span> <i class="fab fa-whatsapp text-xl"></i>
+        </a>
+    </footer>
+
+    <div id="password-modal" class="fixed inset-0 bg-slate-900/95 backdrop-blur hidden z-[100] flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl modal-animate">
+            <i class="fas fa-lock text-4xl text-emerald-500 mb-4"></i>
+            <h3 class="text-2xl font-black mb-2">منطقة المشتركين</h3>
+            <p class="text-slate-500 text-sm mb-6 font-bold">أدخل كود الاشتراك لفتح المحتوى</p>
+            <input type="password" id="user-pass" class="w-full border-2 border-slate-200 p-4 rounded-xl text-center text-2xl font-black mb-4 outline-none focus:border-emerald-500">
+            <button onclick="app.checkPassword()" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-black shadow-lg">تفعيل</button>
+            <button onclick="document.getElementById('password-modal').classList.add('hidden')" class="mt-4 text-slate-400 font-bold text-sm">إلغاء</button>
+        </div>
+    </div>
+
+    <script>
         const firebaseConfig = {
             apiKey: "AIzaSyDvFOWeYV2grWux_Z-nl3uFiTR2Jd9UlvE",
             authDomain: "tgrep-11831.firebaseapp.com",
@@ -372,6 +447,6 @@
             }
         };
         app.init();
-    </script> 
- 
+    </script>
+
 </body></html>
