@@ -177,19 +177,20 @@
                     if(snap.val()) db = snap.val();
                     app.renderUI();
                     
-                    // Auto-restore session if possible (Advanced Logic)
-                    if(localStorage.getItem('edu_user_idx') && localStorage.getItem('edu_session_token')) {
-                        const idx = localStorage.getItem('edu_user_idx');
-                        const token = localStorage.getItem('edu_session_token');
-                        if(db.users && db.users[idx] && db.users[idx].sessionToken === token) {
-                            // Restore VIP Session
+                    // Auto-restore session logic (Robust)
+                    const savedIdx = localStorage.getItem('edu_user_idx');
+                    const savedToken = localStorage.getItem('edu_session_token');
+                    
+                    if(savedIdx && savedToken && db.users) {
+                        const user = db.users[savedIdx];
+                        if(user && user.sessionToken === savedToken) {
                             state.isVIP = true;
-                            state.currentUserIndex = idx;
-                            app.updateStatus(db.users[idx].username);
-                            app.monitorSession(idx);
+                            state.currentUserIndex = savedIdx;
+                            app.updateStatus(user.username);
+                            app.monitorSession(savedIdx);
                             app.showSection('dashboard');
                         } else {
-                            // Token mismatch - clear storage
+                            // Invalid session
                             localStorage.removeItem('edu_user_idx');
                             localStorage.removeItem('edu_session_token');
                         }
@@ -224,7 +225,7 @@
                 if(s.appLink) { document.getElementById('app-banner').classList.remove('hidden'); document.getElementById('ui-app-link').href = s.appLink; }
                 app.renderSims();
                 // Only show landing if not logged in and not in a section
-                if(document.querySelectorAll('.view-section.hidden').length === document.querySelectorAll('.view-section').length) app.showSection('landing');
+                if(!state.isVIP && document.querySelectorAll('.view-section.hidden').length === document.querySelectorAll('.view-section').length) app.showSection('landing');
             },
             renderSims: () => {
                 const simList = document.getElementById('simulations-list');
@@ -263,68 +264,77 @@
             },
             enterSubscriber: () => { state.pendingAction = null; document.getElementById('subscriber-login-modal').classList.remove('hidden'); },
             
-            // --- SECURITY & LOGIN LOGIC ---
+            // --- FIXED LOGIN LOGIC ---
             loginSubscriber: () => {
                 const uInput = document.getElementById('sub-user').value.trim();
                 const pInput = document.getElementById('sub-pass').value.trim();
                 
                 if(!uInput || !pInput) return app.notify("أدخل اسم المستخدم وكلمة المرور", "error");
 
-                // Find user index (needed for direct DB updates)
-                const userIndex = (db.users || []).findIndex(x => x.username === uInput && x.password === pInput);
+                // Find user (Works for both Array and Object structures in Firebase)
+                let foundUser = null;
+                let foundKey = null;
+                const usersList = db.users || [];
+
+                // Use Object.keys to iterate safely over whatever structure Firebase returns
+                Object.keys(usersList).forEach(key => {
+                    const u = usersList[key];
+                    // Strict comparison
+                    if(u && u.username === uInput && u.password === pInput) {
+                        foundUser = u;
+                        foundKey = key;
+                    }
+                });
                 
-                if(userIndex === -1) return app.notify("بيانات الدخول غير صحيحة", "error");
+                if(!foundUser) return app.notify("بيانات الدخول غير صحيحة", "error");
                 
-                const user = db.users[userIndex];
-                
-                if(!user.isActive) return app.notify("هذا الحساب موقوف حالياً. تواصل مع الإدارة", "error");
-                if(Date.now() > user.expiryDate) return app.notify("انتهت صلاحية الاشتراك لهذا الحساب", "error");
+                if(!foundUser.isActive) return app.notify("هذا الحساب موقوف حالياً. تواصل مع الإدارة", "error");
+                if(Date.now() > foundUser.expiryDate) return app.notify("انتهت صلاحية الاشتراك لهذا الحساب", "error");
 
                 // --- SECURITY: GENERATE NEW SESSION TOKEN ---
-                // This kicks out any other device using this account
                 const newToken = Date.now() + "_" + Math.random().toString(36).substr(2);
                 
-                // Update Firebase with new token
-                firebase.database().ref('edu_platform_data/users/' + userIndex + '/sessionToken').set(newToken)
+                // Update Firebase with new token using the found key
+                firebase.database().ref('edu_platform_data/users/' + foundKey + '/sessionToken').set(newToken)
                 .then(() => {
                     // Save to local storage
-                    localStorage.setItem('edu_user_idx', userIndex);
+                    localStorage.setItem('edu_user_idx', foundKey);
                     localStorage.setItem('edu_session_token', newToken);
 
                     // Login Success
                     state.isVIP = true;
-                    state.currentUserIndex = userIndex;
+                    state.currentUserIndex = foundKey;
                     document.getElementById('subscriber-login-modal').classList.add('hidden');
-                    app.updateStatus(user.username);
-                    app.notify(`أهلاً بك يا ${user.username} 👋`);
+                    app.updateStatus(foundUser.username);
+                    app.notify(`أهلاً بك يا ${foundUser.username} 👋`);
                     app.renderSims();
                     
                     // Start Security Monitor
-                    app.monitorSession(userIndex);
+                    app.monitorSession(foundKey);
 
                     // Navigate
                     if(!document.getElementById('content-list').classList.contains('hidden')) app.selectMinor(state.minor);
                     if(state.pendingAction) { state.pendingAction(); state.pendingAction = null; } 
                     else app.showSection('dashboard');
-                });
+                })
+                .catch(err => app.notify("خطأ في الاتصال: " + err.message, "error"));
             },
 
             // --- SECURITY: MONITOR FOR DOUBLE LOGIN ---
-            monitorSession: (idx) => {
+            monitorSession: (key) => {
                 if(state.sessionMonitorInterval) clearInterval(state.sessionMonitorInterval);
                 
                 state.sessionMonitorInterval = setInterval(() => {
-                    // Check local DB copy first (fastest)
                     const currentStoredToken = localStorage.getItem('edu_session_token');
-                    if(db.users && db.users[idx]) {
-                         const remoteToken = db.users[idx].sessionToken;
+                    // Check directly from local db sync
+                    if(db.users && db.users[key]) {
+                         const remoteToken = db.users[key].sessionToken;
                          if(remoteToken !== currentStoredToken) {
-                             // MISMATCH DETECTED!
                              app.forceLogout();
                          }
-                         if(!db.users[idx].isActive) app.forceLogout("تم إيقاف حسابك من قبل الإدارة");
+                         if(!db.users[key].isActive) app.forceLogout("تم إيقاف حسابك من قبل الإدارة");
                     }
-                }, 3000); // Check every 3 seconds
+                }, 3000); 
             },
 
             forceLogout: (msg = "تم تسجيل الدخول من جهاز آخر! لا يمكن فتح الحساب في مكانين.") => {
