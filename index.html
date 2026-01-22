@@ -22,6 +22,15 @@
                             800: '#166534',
                             900: '#14532d',
                         }
+                    },
+                    animation: {
+                        'bounce-in': 'bounceIn 0.5s cubic-bezier(0.8, 0, 1, 1)',
+                    },
+                    keyframes: {
+                        bounceIn: {
+                            '0%': { transform: 'scale(0.8)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
+                        }
                     }
                 }
             }
@@ -50,7 +59,6 @@
         .correct { background: #d1fae5 !important; border-color: #10b981 !important; color: #065f46; }
         .wrong { background: #fee2e2 !important; border-color: #ef4444 !important; color: #991b1b; }
         
-        /* مكان الإشعار في المنتصف */
         #toast-notification { 
             position: fixed; 
             top: 20px; 
@@ -78,7 +86,6 @@
         .review-card.correct-ans { border-right: 6px solid #10b981; background: #f0fdf4; }
         .review-card.wrong-ans { border-right: 6px solid #ef4444; background: #fef2f2; }
 
-        /* تنسيق أيقونات التواصل العائمة */
         .contact-float {
             position: fixed;
             bottom: 25px;
@@ -117,6 +124,19 @@
       <span id="toast-msg"></span> 
   </div> 
 
+  <div id="custom-alert-modal" class="fixed inset-0 bg-slate-900/95 backdrop-blur z-[200] hidden flex items-center justify-center p-6">
+      <div class="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center animate-bounce-in border-4 border-red-100 relative">
+          <div class="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <i class="fas fa-user-shield text-5xl text-red-500"></i>
+          </div>
+          <h3 class="text-2xl font-black text-slate-800 mb-2">تنبيه أمني</h3>
+          <p id="custom-alert-msg" class="text-slate-500 font-bold mb-8 leading-relaxed text-sm"></p>
+          <button onclick="location.reload()" class="w-full bg-slate-800 text-white py-4 rounded-xl font-black shadow-lg hover:bg-slate-900 transition-all transform hover:scale-[1.02]">
+              <i class="fas fa-redo ml-2"></i> إعادة تحميل الصفحة
+          </button>
+      </div>
+  </div>
+
   <div class="contact-float">
       <a id="whatsapp-link" href="#" target="_blank" class="contact-btn whatsapp-float hidden" title="تواصل عبر واتساب">
           <i class="fab fa-whatsapp"></i>
@@ -128,7 +148,11 @@
 
   <div id="loading" class="fixed inset-0 bg-white z-[999] flex flex-col items-center justify-center"> 
    <div class="w-20 h-20 border-8 border-brand-500 border-t-transparent rounded-full animate-spin mb-6"></div> 
-   <p class="font-black text-slate-400 text-lg animate-pulse">جاري الاتصال بالمنصة...</p> 
+   <p id="loading-text" class="font-black text-slate-400 text-lg animate-pulse">جاري الاتصال بالمنصة...</p> 
+   
+   <button id="retry-btn" onclick="location.reload()" class="hidden mt-6 bg-red-50 text-red-500 px-6 py-2 rounded-full font-bold text-sm border border-red-100 hover:bg-red-100">
+       <i class="fas fa-wifi"></i> إعادة الاتصال
+   </button>
   </div> 
 
   <div id="app-banner" class="hidden p-3 bg-gradient-to-r from-slate-900 to-slate-800 text-white sticky top-0 z-50 shadow-lg border-b border-slate-700"> 
@@ -345,8 +369,9 @@
         };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
+        const dbRef = database.ref('edu_platform_data');
         
-        let db = { quizzes: [], files: [], simulations: [], settings: [], users: [] };
+        let db = { quizzes: [], files: [], simulations: [], settings: {}, users: [] };
         let state = { 
             isVIP: false, 
             major: '', 
@@ -361,21 +386,40 @@
 
         const app = {
             init: () => {
-                database.ref('edu_platform_data').once('value', snap => {
-                    document.getElementById('loading').classList.add('hidden');
-                    if(snap.val()) {
-                        const val = snap.val();
-                        db.quizzes = val.quizzes || [];
-                        db.files = val.files || [];
-                        db.simulations = val.simulations || [];
-                        db.settings = val.settings || {};
+                // إظهار زر إعادة المحاولة بعد 10 ثواني إذا تأخر التحميل
+                setTimeout(() => {
+                    const l = document.getElementById('loading');
+                    if(!l.classList.contains('hidden')) {
+                        document.getElementById('loading-text').innerText = "يبدو أن الاتصال بطيء...";
+                        document.getElementById('retry-btn').classList.remove('hidden');
                     }
+                }, 10000);
+
+                // --- التحسين الكبير: تحميل الإعدادات فقط أولاً ---
+                dbRef.child('settings').once('value').then(snap => {
+                    db.settings = snap.val() || {};
+                    
+                    // إخفاء شاشة التحميل فوراً وعرض الموقع
+                    document.getElementById('loading').classList.add('hidden');
                     app.renderUI();
                     app.checkSession();
-                }, (error) => {
-                     document.getElementById('loading').classList.add('hidden');
-                     app.notify("يرجى التحقق من اتصال الإنترنت", "error");
+                    
+                    // --- تحميل باقي البيانات الثقيلة في الخلفية ---
+                    app.loadHeavyData();
+                }).catch(err => {
+                    console.error(err);
+                    document.getElementById('loading-text').innerText = "خطأ في الاتصال، تأكد من الإنترنت";
+                    document.getElementById('retry-btn').classList.remove('hidden');
                 });
+            },
+
+            // دالة جديدة لتحميل البيانات الثقيلة بشكل منفصل
+            loadHeavyData: () => {
+                // تحميل المحاكيات
+                dbRef.child('simulations').once('value', s => { db.simulations = s.val() || []; app.renderSims(); });
+                // تحميل الاختبارات والملفات (للحفظ في الذاكرة فقط)
+                dbRef.child('quizzes').once('value', s => { db.quizzes = s.val() || []; });
+                dbRef.child('files').once('value', s => { db.files = s.val() || []; });
             },
 
             notify: (msg, type='success') => {
@@ -404,21 +448,22 @@
 
                 app.notify("جاري التحقق...", "success");
 
-                database.ref('edu_platform_data/users').once('value', snap => {
-                    if (!snap.exists()) return app.notify("لا يوجد مستخدمين مسجلين", "error");
+                // البحث في قاعدة البيانات عن المستخدم المحدد فقط (تحسين الأداء)
+                database.ref('edu_platform_data/users').orderByChild('username').equalTo(uInput).once('value', snap => {
+                    if (!snap.exists()) return app.notify("بيانات الدخول غير صحيحة", "error");
 
                     let foundUser = null;
                     let foundKey = null;
 
                     snap.forEach(childSnapshot => {
                         const u = childSnapshot.val();
-                        if(u && u.username === uInput && u.password === pInput) {
+                        if(u.password === pInput) {
                             foundUser = u;
                             foundKey = childSnapshot.key;
                         }
                     });
 
-                    if(!foundUser) return app.notify("بيانات الدخول غير صحيحة", "error");
+                    if(!foundUser) return app.notify("كلمة المرور غير صحيحة", "error");
                     if(!foundUser.isActive) return app.notify("عذراً، هذا الحساب موقوف", "error");
                     if(Date.now() > foundUser.expiryDate) return app.notify("انتهت صلاحية اشتراكك", "error");
 
@@ -438,7 +483,7 @@
                     })
                     .catch(err => {
                         console.error(err);
-                        app.notify("خطأ في بدء الجلسة، تأكد من قواعد الأمان", "error");
+                        app.notify("خطأ في بدء الجلسة", "error");
                     });
 
                 }).catch(err => {
@@ -471,8 +516,9 @@
                 userActiveRef.on('value', snap => {
                     if (snap.exists() && snap.val() === false) {
                         userActiveRef.off();
-                        alert("تم إيقاف حسابك من قبل الإدارة");
-                        app.logoutForce(false);
+                        localStorage.clear();
+                        document.getElementById('custom-alert-msg').innerText = "⛔ تم إيقاف حسابك من قبل الإدارة.";
+                        document.getElementById('custom-alert-modal').classList.remove('hidden');
                     }
                 });
             },
@@ -491,9 +537,11 @@
             logoutForce: (kicked = false) => {
                 localStorage.clear();
                 if(kicked) {
-                    alert("⚠️ تم تسجيل الدخول من جهاز آخر.\nلا يمكن فتح الحساب على جهازين في نفس الوقت.");
+                    document.getElementById('custom-alert-msg').innerText = "⚠️ تم تسجيل الدخول من جهاز آخر.\nلا يمكن فتح الحساب على جهازين في نفس الوقت.";
+                    document.getElementById('custom-alert-modal').classList.remove('hidden');
+                } else {
+                    location.reload();
                 }
-                location.reload();
             },
 
             renderUI: () => {
@@ -505,7 +553,6 @@
                 };
                 for(let k in els) if(document.getElementById(k)) document.getElementById(k).innerText = els[k] || "";
                 
-                // --- منطق تحديث أيقونات التواصل العائمة ---
                 const waLink = document.getElementById('whatsapp-link');
                 const tgLink = document.getElementById('telegram-link');
                 
@@ -522,7 +569,6 @@
                 } else {
                     tgLink.classList.add('hidden');
                 }
-                // ----------------------------------------
                 
                 if(s.tutorialText && s.tutorialText.trim() !== "") {
                     document.getElementById('ui-tutorial-box').classList.remove('hidden');
@@ -817,3 +863,4 @@
     </script> 
  
 </body></html>
+
