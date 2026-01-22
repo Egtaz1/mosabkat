@@ -21,7 +21,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script> 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script> 
   <style>
-        body { font-family: 'Cairo', sans-serif; background-color: #f4f7f6; user-select: none; }
+        body { font-family: 'Cairo', sans-serif; background-color: #f4f7f6; user-select: none; -webkit-user-select: none; }
         .hidden { display: none !important; }
         .modal-animate { animation: slideUp 0.4s ease-out; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -37,7 +37,7 @@
         .review-card.wrong-ans { border-right: 6px solid #ef4444; background: #fef2f2; }
     </style> 
  </head> 
- <body class="text-slate-800 pb-24"> 
+ <body class="text-slate-800 pb-24" oncontextmenu="return false;"> 
   <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold min-w-[300px] justify-center"> <i id="toast-icon" class="text-xl"></i> <span id="toast-msg"></span> 
   </div> 
   <div id="loading" class="fixed inset-0 bg-white z-[999] flex flex-col items-center justify-center"> 
@@ -74,7 +74,7 @@
     </div> 
    </section> 
    <section id="dashboard" class="view-section hidden space-y-8"> 
-    <div class="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center"> <button onclick="app.showSection('landing')" class="bg-slate-100 px-4 py-2 rounded-xl font-bold text-xs text-slate-500">خروج</button> <span id="user-status" class="font-black text-xs"></span> 
+    <div class="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center"> <button onclick="app.logoutUser()" class="bg-slate-100 px-4 py-2 rounded-xl font-bold text-xs text-slate-500 hover:bg-red-50 hover:text-red-500 transition-colors">خروج</button> <span id="user-status" class="font-black text-xs"></span> 
     </div> 
     <div id="simulations-list" class="space-y-4"></div> 
     <div class="text-center"> 
@@ -165,7 +165,9 @@
             qIdx: 0, 
             timerInterval: null,
             pendingAction: null,
-            answers: [] 
+            answers: [],
+            currentUserIndex: null,
+            sessionMonitorInterval: null
         };
 
         const app = {
@@ -174,6 +176,24 @@
                     document.getElementById('loading').classList.add('hidden');
                     if(snap.val()) db = snap.val();
                     app.renderUI();
+                    
+                    // Auto-restore session if possible (Advanced Logic)
+                    if(localStorage.getItem('edu_user_idx') && localStorage.getItem('edu_session_token')) {
+                        const idx = localStorage.getItem('edu_user_idx');
+                        const token = localStorage.getItem('edu_session_token');
+                        if(db.users && db.users[idx] && db.users[idx].sessionToken === token) {
+                            // Restore VIP Session
+                            state.isVIP = true;
+                            state.currentUserIndex = idx;
+                            app.updateStatus(db.users[idx].username);
+                            app.monitorSession(idx);
+                            app.showSection('dashboard');
+                        } else {
+                            // Token mismatch - clear storage
+                            localStorage.removeItem('edu_user_idx');
+                            localStorage.removeItem('edu_session_token');
+                        }
+                    }
                 });
             },
             notify: (msg, type='success') => {
@@ -203,6 +223,7 @@
                 if(s.extLinkUrl) { document.getElementById('ui-ext-link-area').classList.remove('hidden'); document.getElementById('ui-ext-link').href = s.extLinkUrl; }
                 if(s.appLink) { document.getElementById('app-banner').classList.remove('hidden'); document.getElementById('ui-app-link').href = s.appLink; }
                 app.renderSims();
+                // Only show landing if not logged in and not in a section
                 if(document.querySelectorAll('.view-section.hidden').length === document.querySelectorAll('.view-section').length) app.showSection('landing');
             },
             renderSims: () => {
@@ -231,36 +252,98 @@
                 }
             },
             showSection: (id) => { document.querySelectorAll('.view-section').forEach(e=>e.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); window.scrollTo(0,0); },
-            enterVisitor: () => { state.isVIP = false; app.updateStatus(); app.showSection('dashboard'); },
+            enterVisitor: () => { 
+                state.isVIP = false; 
+                state.currentUserIndex = null;
+                localStorage.removeItem('edu_user_idx');
+                localStorage.removeItem('edu_session_token');
+                if(state.sessionMonitorInterval) clearInterval(state.sessionMonitorInterval);
+                app.updateStatus(); 
+                app.showSection('dashboard'); 
+            },
             enterSubscriber: () => { state.pendingAction = null; document.getElementById('subscriber-login-modal').classList.remove('hidden'); },
             
-            // --- NEW LOGIN LOGIC ---
+            // --- SECURITY & LOGIN LOGIC ---
             loginSubscriber: () => {
                 const uInput = document.getElementById('sub-user').value.trim();
                 const pInput = document.getElementById('sub-pass').value.trim();
                 
                 if(!uInput || !pInput) return app.notify("أدخل اسم المستخدم وكلمة المرور", "error");
 
-                const user = (db.users || []).find(x => x.username === uInput && x.password === pInput);
+                // Find user index (needed for direct DB updates)
+                const userIndex = (db.users || []).findIndex(x => x.username === uInput && x.password === pInput);
                 
-                if(!user) return app.notify("بيانات الدخول غير صحيحة", "error");
+                if(userIndex === -1) return app.notify("بيانات الدخول غير صحيحة", "error");
+                
+                const user = db.users[userIndex];
                 
                 if(!user.isActive) return app.notify("هذا الحساب موقوف حالياً. تواصل مع الإدارة", "error");
-                
                 if(Date.now() > user.expiryDate) return app.notify("انتهت صلاحية الاشتراك لهذا الحساب", "error");
 
-                // Login Success
-                state.isVIP = true;
-                document.getElementById('subscriber-login-modal').classList.add('hidden');
-                app.updateStatus(user.username);
-                app.notify(`أهلاً بك يا ${user.username} 👋`);
-                app.renderSims();
+                // --- SECURITY: GENERATE NEW SESSION TOKEN ---
+                // This kicks out any other device using this account
+                const newToken = Date.now() + "_" + Math.random().toString(36).substr(2);
                 
-                // Navigate
-                if(!document.getElementById('content-list').classList.contains('hidden')) app.selectMinor(state.minor);
-                if(state.pendingAction) { state.pendingAction(); state.pendingAction = null; } 
-                else app.showSection('dashboard');
+                // Update Firebase with new token
+                firebase.database().ref('edu_platform_data/users/' + userIndex + '/sessionToken').set(newToken)
+                .then(() => {
+                    // Save to local storage
+                    localStorage.setItem('edu_user_idx', userIndex);
+                    localStorage.setItem('edu_session_token', newToken);
+
+                    // Login Success
+                    state.isVIP = true;
+                    state.currentUserIndex = userIndex;
+                    document.getElementById('subscriber-login-modal').classList.add('hidden');
+                    app.updateStatus(user.username);
+                    app.notify(`أهلاً بك يا ${user.username} 👋`);
+                    app.renderSims();
+                    
+                    // Start Security Monitor
+                    app.monitorSession(userIndex);
+
+                    // Navigate
+                    if(!document.getElementById('content-list').classList.contains('hidden')) app.selectMinor(state.minor);
+                    if(state.pendingAction) { state.pendingAction(); state.pendingAction = null; } 
+                    else app.showSection('dashboard');
+                });
             },
+
+            // --- SECURITY: MONITOR FOR DOUBLE LOGIN ---
+            monitorSession: (idx) => {
+                if(state.sessionMonitorInterval) clearInterval(state.sessionMonitorInterval);
+                
+                state.sessionMonitorInterval = setInterval(() => {
+                    // Check local DB copy first (fastest)
+                    const currentStoredToken = localStorage.getItem('edu_session_token');
+                    if(db.users && db.users[idx]) {
+                         const remoteToken = db.users[idx].sessionToken;
+                         if(remoteToken !== currentStoredToken) {
+                             // MISMATCH DETECTED!
+                             app.forceLogout();
+                         }
+                         if(!db.users[idx].isActive) app.forceLogout("تم إيقاف حسابك من قبل الإدارة");
+                    }
+                }, 3000); // Check every 3 seconds
+            },
+
+            forceLogout: (msg = "تم تسجيل الدخول من جهاز آخر! لا يمكن فتح الحساب في مكانين.") => {
+                clearInterval(state.sessionMonitorInterval);
+                state.isVIP = false;
+                state.currentUserIndex = null;
+                localStorage.removeItem('edu_user_idx');
+                localStorage.removeItem('edu_session_token');
+                alert(msg);
+                location.reload();
+            },
+
+            logoutUser: () => {
+                if(confirm("هل تريد تسجيل الخروج؟")) {
+                    app.enterVisitor();
+                    app.showSection('landing');
+                }
+            },
+
             updateStatus: (name) => document.getElementById('user-status').innerText = state.isVIP ? `👤 ${name} (VIP)` : "زائر (محدود)",
             
             selectMajor: (m) => { state.major = m; if(m==='Competition') app.selectMinor('ملفات'); else app.showSection('sub-dashboard'); },
