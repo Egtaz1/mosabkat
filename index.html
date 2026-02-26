@@ -187,7 +187,7 @@
    </section> 
    <section id="exam-player" class="view-section hidden max-w-3xl mx-auto space-y-6"> 
     <div class="bg-white p-6 rounded-[2rem] shadow-xl border-t-8 border-brand-500 sticky top-24 z-30"> 
-     <div class="flex justify-between mb-4 items-center"> <span id="timer-display" class="font-black text-red-500 text-2xl font-mono hidden tracking-widest bg-red-50 px-3 py-1 rounded-lg">00:00</span> <span id="progress-text" class="text-sm font-black text-brand-700 bg-brand-50 px-3 py-1 rounded-full"></span> <button onclick="location.reload()" class="text-xs font-bold text-red-400 hover:text-red-600 bg-red-50 px-3 py-1 rounded-lg">انسحاب</button> 
+     <div class="flex justify-between mb-4 items-center"> <span id="timer-display" class="font-black text-red-500 text-2xl font-mono hidden tracking-widest bg-red-50 px-3 py-1 rounded-lg">00:00</span> <span id="progress-text" class="text-sm font-black text-brand-700 bg-brand-50 px-3 py-1 rounded-full"></span> <button onclick="app.returnToHome()" class="text-xs font-bold text-red-400 hover:text-red-600 bg-red-50 px-3 py-1 rounded-lg">انسحاب</button> 
      </div> 
      <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden"> 
       <div id="progress-bar" class="h-full bg-brand-500 transition-all duration-500 ease-out shadow-[0_0_10px_#22c55e]" style="width: 0%"></div> 
@@ -199,7 +199,7 @@
       <div class="absolute top-0 left-0 w-full h-full bg-brand-50 opacity-20 pointer-events-none" style="background-image: radial-gradient(#22c55e 1px, transparent 1px); background-size: 20px 20px;"></div> <i class="fas fa-award text-7xl text-yellow-400 mb-6 block animate-bounce drop-shadow-lg"></i> 
       <h2 class="text-3xl font-black mb-2 text-slate-800">نتيجة الاختبار</h2> 
       <p id="res-score" class="text-7xl font-black text-brand-600 mb-6 font-mono tracking-tighter"></p> 
-      <p id="res-msg" class="text-xl font-bold text-slate-600 mb-8 bg-slate-50 py-3 rounded-2xl"></p> <button onclick="location.reload()" class="bg-slate-900 text-white px-10 py-4 rounded-full font-black shadow-lg hover:bg-black hover:scale-105 transition-all">العودة للقائمة الرئيسية</button> 
+      <p id="res-msg" class="text-xl font-bold text-slate-600 mb-8 bg-slate-50 py-3 rounded-2xl"></p> <button onclick="app.returnToHome()" class="bg-slate-900 text-white px-10 py-4 rounded-full font-black shadow-lg hover:bg-black hover:scale-105 transition-all">العودة للقائمة الرئيسية</button> 
      </div> 
      <div class="text-right"> 
       <h3 class="font-black text-2xl text-slate-700 mb-6 border-r-8 border-blue-500 pr-4 flex items-center gap-3 bg-white p-4 rounded-xl shadow-sm"><i class="fas fa-history text-blue-500"></i> مراجعة الإجابات التفصيلية</h3> 
@@ -354,19 +354,83 @@
                 // FAST LOAD: Only wait for settings to render UI
                 dbRef.child('settings').once('value').then(snap => {
                     db.settings = snap.val() || {};
-                    // Hide loading immediately
                     const loader = document.getElementById('loading');
                     loader.style.opacity = '0';
                     setTimeout(() => loader.classList.add('hidden'), 500); 
                     
                     app.renderUI();
                     app.checkSession();
-                    app.fetchMajors(); // Fetch majors for grid
+                    app.fetchMajors();
                     
-                    // FETCH HEAVY DATA IN BACKGROUND (Non-blocking)
-                    app.loadHeavyData(); 
+                    // DEEP LINKING CHECK & PERFORMANCE FIX
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if(urlParams.get('quiz')) {
+                        // If link has a quiz, load specifically that quiz fast!
+                        app.checkUrlParams();
+                        app.loadHeavyData(); // Load the rest in background
+                    } else {
+                        // Regular flow
+                        app.showSection('landing');
+                        app.loadHeavyData(); 
+                    }
                 }).catch(err => { console.error(err); document.getElementById('loading-text').innerText = "خطأ في الاتصال، تأكد من الإنترنت"; document.getElementById('retry-btn').classList.remove('hidden'); });
             },
+            
+            // --- DEEP LINKING LOGIC (FAST FETCH) ---
+            checkUrlParams: () => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const quizId = urlParams.get('quiz');
+                
+                if (quizId) {
+                    app.notify("جاري تجهيز الاختبار المطلوب...", "success");
+                    // Fetch ONLY the specific quiz directly from Firebase for blazing fast load
+                    database.ref('edu_platform_data/quizzes').orderByChild('id').equalTo(Number(quizId)).once('value')
+                    .then(snap => {
+                        if (snap.exists()) {
+                            const qData = snap.val();
+                            const qKey = Object.keys(qData)[0]; // Get the first matched quiz
+                            const q = qData[qKey];
+                            
+                            // Add to local state so startQuiz can find it immediately
+                            if(!db.quizzes) db.quizzes = [];
+                            if(!db.quizzes.find(x => x.id === q.id)) db.quizzes.push(q);
+                            
+                            const locked = q.mode === 'subscriber' && !state.isVIP;
+                            app.startQuiz(q.id, locked);
+                        } else {
+                            app.notify("عذراً، هذا الاختبار غير موجود أو تم حذفه", "error");
+                            app.showSection('landing');
+                        }
+                    }).catch(err => {
+                        console.error(err);
+                        app.notify("حدث خطأ في الاتصال بقاعدة البيانات", "error");
+                        app.showSection('landing');
+                    });
+                }
+            },
+
+            returnToHome: () => {
+                // Stop timer if user withdrew early
+                if(state.timerInterval) clearInterval(state.timerInterval);
+                
+                // Clear the URL parameter so refreshing doesn't loop the exam
+                if (window.history.replaceState) {
+                    window.history.replaceState(null, null, window.location.pathname);
+                }
+                
+                // Hide exam related UI elements completely
+                document.getElementById('exam-player').classList.add('hidden');
+                document.getElementById('result-box').classList.add('hidden');
+                document.getElementById('question-box').classList.add('hidden');
+                
+                // Return to appropriate section
+                if(state.isVIP) {
+                    app.showSection('dashboard');
+                } else {
+                    app.showSection('landing'); 
+                }
+            },
+
             loadHeavyData: () => {
                 // Fetch all data in parallel but don't block UI
                 Promise.all([
@@ -376,7 +440,15 @@
                     dbRef.child('majorConfigs').once('value')
                 ]).then(results => {
                     db.simulations = results[0].val() || [];
-                    db.quizzes = results[1].val() || [];
+                    // Merge quizzes safely in case Deep Link already loaded one
+                    const incomingQuizzes = results[1].val() || [];
+                    if(db.quizzes && db.quizzes.length > 0) {
+                        incomingQuizzes.forEach(iq => {
+                            if(!db.quizzes.find(xq => xq.id === iq.id)) db.quizzes.push(iq);
+                        });
+                    } else {
+                        db.quizzes = incomingQuizzes;
+                    }
                     db.files = results[2].val() || [];
                     db.majorConfigs = results[3].val() || {};
                     state.heavyDataLoaded = true;
@@ -386,8 +458,7 @@
                 if(state.heavyDataLoaded) {
                     callback();
                 } else {
-                    app.notify("جاري تحميل البيانات، لحظة واحدة...", "success");
-                    // Poll until loaded
+                    app.notify("جاري تحميل بيانات الأقسام، لحظة واحدة...", "success");
                     const check = setInterval(() => {
                         if(state.heavyDataLoaded) {
                             clearInterval(check);
@@ -449,7 +520,7 @@
             monitorSession: (uid, localToken) => { const userTokenRef = database.ref(`edu_platform_data/users/${uid}/sessionToken`); userTokenRef.on('value', snap => { const serverToken = snap.val(); if (serverToken && serverToken !== localToken) { userTokenRef.off(); app.logoutForce(true); } }); const userActiveRef = database.ref(`edu_platform_data/users/${uid}/isActive`); userActiveRef.on('value', snap => { if (snap.exists() && snap.val() === false) { userActiveRef.off(); localStorage.clear(); document.getElementById('custom-alert-msg').innerText = "⛔ تم إيقاف حسابك من قبل الإدارة."; document.getElementById('custom-alert-modal').classList.remove('hidden'); } }); },
             activateVIP: (name, uid) => { state.isVIP = true; app.updateStatus(name); if(state.pendingAction) { state.pendingAction(); state.pendingAction = null; } else if(document.getElementById('landing').classList.contains('hidden')) { } else { app.showSection('dashboard'); } },
             logoutForce: (kicked = false) => { localStorage.clear(); if(kicked) { document.getElementById('custom-alert-msg').innerText = "⚠️ تم تسجيل الدخول من جهاز آخر.\nلا يمكن فتح الحساب على جهازين في نفس الوقت."; document.getElementById('custom-alert-modal').classList.remove('hidden'); } else { location.reload(); } },
-            renderUI: () => { const s = db.settings || {}; const els = { 'ui-site-name': s.siteName, 'ui-hero-title': s.heroTitle, 'ui-hero-desc': s.heroDesc, 'footer-text': s.footerText, 'ui-app-text': s.appText, 'ui-ext-text': s.extLinkText, 'ui-btn-vis': s.btnVisitor, 'ui-btn-sub': s.btnSub, }; for(let k in els) if(document.getElementById(k)) document.getElementById(k).innerText = els[k] || ""; const waLink = document.getElementById('whatsapp-link'); const tgLink = document.getElementById('telegram-link'); if(s.whatsapp) { waLink.href = `https://wa.me/${s.whatsapp}`; waLink.classList.remove('hidden'); } else { waLink.classList.add('hidden'); } if(s.telegram) { tgLink.href = `https://t.me/${s.telegram}`; tgLink.classList.remove('hidden'); } else { tgLink.classList.add('hidden'); } if(s.tutorialText && s.tutorialText.trim() !== "") { document.getElementById('ui-tutorial-box').classList.remove('hidden'); document.getElementById('ui-tutorial-text').innerText = s.tutorialText; } else document.getElementById('ui-tutorial-box').classList.add('hidden'); if(s.extLinkUrl) { document.getElementById('ui-ext-link-area').classList.remove('hidden'); document.getElementById('ui-ext-link').href = s.extLinkUrl; } if(s.appLink) { document.getElementById('app-banner').classList.remove('hidden'); document.getElementById('ui-app-link').href = s.appLink; } if(document.querySelectorAll('.view-section.hidden').length === document.querySelectorAll('.view-section').length) app.showSection('landing'); },
+            renderUI: () => { const s = db.settings || {}; const els = { 'ui-site-name': s.siteName, 'ui-hero-title': s.heroTitle, 'ui-hero-desc': s.heroDesc, 'footer-text': s.footerText, 'ui-app-text': s.appText, 'ui-ext-text': s.extLinkText, 'ui-btn-vis': s.btnVisitor, 'ui-btn-sub': s.btnSub, }; for(let k in els) if(document.getElementById(k)) document.getElementById(k).innerText = els[k] || ""; const waLink = document.getElementById('whatsapp-link'); const tgLink = document.getElementById('telegram-link'); if(s.whatsapp) { waLink.href = `https://wa.me/${s.whatsapp}`; waLink.classList.remove('hidden'); } else { waLink.classList.add('hidden'); } if(s.telegram) { tgLink.href = `https://t.me/${s.telegram}`; tgLink.classList.remove('hidden'); } else { tgLink.classList.add('hidden'); } if(s.tutorialText && s.tutorialText.trim() !== "") { document.getElementById('ui-tutorial-box').classList.remove('hidden'); document.getElementById('ui-tutorial-text').innerText = s.tutorialText; } else document.getElementById('ui-tutorial-box').classList.add('hidden'); if(s.extLinkUrl) { document.getElementById('ui-ext-link-area').classList.remove('hidden'); document.getElementById('ui-ext-link').href = s.extLinkUrl; } if(s.appLink) { document.getElementById('app-banner').classList.remove('hidden'); document.getElementById('ui-app-link').href = s.appLink; } },
             showSection: (id) => { document.querySelectorAll('.view-section').forEach(e=>e.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); window.scrollTo(0,0); },
             enterVisitor: () => { state.isVIP = false; app.updateStatus(); app.showSection('dashboard'); },
             enterSubscriber: () => { state.pendingAction = null; document.getElementById('subscriber-login-modal').classList.remove('hidden'); },
@@ -525,23 +596,17 @@
                 state.minor = m; 
                 document.getElementById('list-title').innerText = m === 'تخصص' ? `تخصص ${state.major}` : m; 
                 
-                // CHECK if current section is Standard or Custom
                 const currentConfig = db.majorConfigs?.[state.major] || {type: 'standard'};
                 const isCustom = currentConfig.type === 'custom';
 
-                // --- FILTERING LOGIC (STRICT) ---
                 const quizzes = (db.quizzes||[]).filter(q => { 
                     if (isCustom) {
-                        // In Custom Section: MUST match Major Name AND Minor
                         return q.major === state.major && q.minor === m;
                     } else {
-                        // In Standard Section: Minor must match AND Major must be 'Universal' (or legacy undefined)
-                        // This prevents custom copies from showing up here
                         return q.minor === m && (q.major === 'Universal' || !q.major || q.major === state.major);
                     }
                 }); 
                 
-                // Render Quizzes
                 const qBox = document.getElementById('quizzes-box'); 
                 const qGrid = document.getElementById('quizzes-grid'); 
                 
@@ -556,7 +621,6 @@
                     qBox.classList.remove('hidden'); 
                 } 
 
-                // Files logic (simplified)
                 const fBox = document.getElementById('files-box');
                 const fGrid = document.getElementById('files-grid');
                 const files = (db.files||[]).filter(f => f.major===state.major && f.minor===m);
@@ -577,7 +641,22 @@
                 }
             },
             openFile: (url, locked) => { if(locked) { state.pendingAction = () => window.open(url, '_blank'); document.getElementById('subscriber-login-modal').classList.remove('hidden'); } else { window.open(url, '_blank'); } },
-            startQuiz: (id, locked) => { if(locked) { state.pendingAction = () => app.startQuiz(id, false); document.getElementById('subscriber-login-modal').classList.remove('hidden'); return; } const q = db.quizzes.find(x => x.id === id); if(!q.questions || !q.questions.length) return app.notify("عذراً، هذا الاختبار لا يحتوي على أسئلة", "error"); state.quiz = { questions: q.questions.map(qt => ({...qt, categoryName: q.name})) }; state.score = 0; state.qIdx = 0; state.answers = new Array(q.questions.length).fill(null); document.getElementById('timer-display').classList.add('hidden'); app.showSection('exam-player'); app.renderQ(); },
+            startQuiz: (id, locked) => { 
+                if(locked) { 
+                    state.pendingAction = () => app.startQuiz(id, false); 
+                    document.getElementById('subscriber-login-modal').classList.remove('hidden'); 
+                    return; 
+                } 
+                const q = db.quizzes.find(x => x.id === id); 
+                if(!q || !q.questions || !q.questions.length) return app.notify("عذراً، هذا الاختبار لا يحتوي على أسئلة", "error"); 
+                state.quiz = { questions: q.questions.map(qt => ({...qt, categoryName: q.name})) }; 
+                state.score = 0; 
+                state.qIdx = 0; 
+                state.answers = new Array(q.questions.length).fill(null); 
+                document.getElementById('timer-display').classList.add('hidden'); 
+                app.showSection('exam-player'); 
+                app.renderQ(); 
+            },
             startSimulation: (id, locked) => { if(locked) { state.pendingAction = () => app.startSimulation(id, false); document.getElementById('subscriber-login-modal').classList.remove('hidden'); return; } const sim = db.simulations.find(x => x.id === id); if(!sim) return; let allQs = db.quizzes || []; const getPool = (majorFilter, minorFilter, count, label) => { let pool = []; allQs.forEach(q => { let matchMajor = majorFilter ? q.major === majorFilter : true; let matchMinor = q.minor === minorFilter; if(matchMajor && matchMinor && q.questions) pool.push(...q.questions); }); pool.sort(() => 0.5 - Math.random()); return pool.slice(0, count).map(q => ({ ...q, categoryName: label })); }; let finalQuestions = []; if(sim.targetMajor) finalQuestions.push(...getPool(sim.targetMajor, 'تخصص', sim.counts.spec, `تخصص: ${sim.targetMajor}`)); finalQuestions.push(...getPool(null, 'تربوي', sim.counts.ped, 'أسئلة تربوية')); finalQuestions.push(...getPool(null, 'جدارات', sim.counts.comp, 'الجدارات السلوكية')); finalQuestions.push(...getPool(null, 'IQ', sim.counts.iq, 'IQ والذكاء')); finalQuestions.push(...getPool(null, 'عربي للجميع', sim.counts.ar, 'لغة عربية (عام)')); finalQuestions.push(...getPool(null, 'انجليزي للجميع', sim.counts.en, 'لغة إنجليزية (عام)')); finalQuestions.push(...getPool(null, 'حاسب آلي', sim.counts.cs, 'حاسب آلي')); finalQuestions.push(...getPool(null, 'معلومات عامة', sim.counts.gen, 'معلومات عامة')); if(!finalQuestions.length) return app.notify("لا توجد أسئلة كافية لإنشاء هذا المحاكي", "error"); state.quiz = { questions: finalQuestions }; state.score = 0; state.qIdx = 0; state.answers = new Array(finalQuestions.length).fill(null); app.startTimer(sim.time); app.showSection('exam-player'); app.renderQ(); },
             startTimer: (min) => { const d = document.getElementById('timer-display'); d.classList.remove('hidden'); let t = min * 60; if(state.timerInterval) clearInterval(state.timerInterval); state.timerInterval = setInterval(() => { let m = Math.floor(t/60); let s = t%60; d.innerText = `${m}:${s<10?'0'+s:s}`; if(t-- <= 0) { clearInterval(state.timerInterval); app.notify("انتهى الوقت المحدد للاختبار", "error"); app.finishExam(); } }, 1000); },
             renderQ: () => { document.getElementById('question-box').classList.remove('hidden'); document.getElementById('result-box').classList.add('hidden'); const q = state.quiz.questions[state.qIdx]; const progress = ((state.qIdx+1)/state.quiz.questions.length*100); document.getElementById('progress-text').innerText = `سؤال ${state.qIdx+1} من ${state.quiz.questions.length}`; document.getElementById('progress-bar').style.width = progress+"%"; document.getElementById('question-box').innerHTML = ` <div class="bg-white p-8 rounded-[2.5rem] shadow-xl space-y-6 border border-slate-100"> <div class="flex justify-between items-center border-b pb-4"> <span class="text-xs font-black bg-slate-100 text-slate-600 px-4 py-2 rounded-full tracking-wide">${q.categoryName || 'سؤال عام'}</span> </div> <h3 class="font-black text-xl md:text-2xl leading-relaxed text-slate-800">${q.text}</h3> <div class="grid gap-4 mt-6"> ${q.opts.map((o,i)=>`<button onclick="app.ans(${i},this)" class="opt-btn group"><span class="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 border-slate-200 flex items-center justify-center text-xs text-slate-400 group-hover:border-brand-500 group-hover:text-brand-500 font-bold transition-colors">${['أ','ب','ج','د'][i]}</span><span class="mr-10 block">${o}</span></button>`).join('')} </div> </div>`; },
