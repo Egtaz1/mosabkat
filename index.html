@@ -247,7 +247,6 @@
      </div> 
     </div> 
    </section> 
-   
    <section id="exam-player" class="view-section hidden max-w-3xl mx-auto space-y-6"> 
     <div class="bg-white p-6 rounded-[2rem] shadow-xl border-t-8 border-brand-500 sticky top-24 z-30"> 
      <div class="flex justify-between mb-4 items-center"> <span id="timer-display" class="font-black text-red-500 text-2xl font-mono hidden tracking-widest bg-red-50 px-3 py-1 rounded-lg">00:00</span> <span id="progress-text" class="text-sm font-black text-brand-700 bg-brand-50 px-3 py-1 rounded-full"></span> <button onclick="app.returnToHome()" class="text-xs font-bold text-red-400 hover:text-red-600 bg-red-50 px-3 py-1 rounded-lg">انسحاب</button> 
@@ -270,7 +269,6 @@
      </div> 
     </div> 
    </section> 
-   
    <section id="about-us" class="view-section hidden space-y-6 max-w-4xl mx-auto"> 
     <div class="bg-white p-8 md:p-12 rounded-[2rem] shadow-sm border border-slate-100"> 
      <div class="flex justify-between items-center mb-8 border-b pb-4"> 
@@ -340,14 +338,14 @@
         document.onkeydown = function(e) { if(e.keyCode == 123 || (e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) || (e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) || (e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) || (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) { return false; } }
         
         const firebaseConfig = {
-              apiKey: "AIzaSyBpitoHdTQLLZoHMed_0HZyexjcleSZfEc",
-              authDomain: "egtaz-86d85.firebaseapp.com",
-              databaseURL: "https://egtaz-86d85-default-rtdb.firebaseio.com",
-              projectId: "egtaz-86d85",
-              storageBucket: "egtaz-86d85.firebasestorage.app",
-              messagingSenderId: "623187146226",
-              appId: "1:623187146226:web:6e41d0d95515543934e76b"
-          };
+              apiKey: "AIzaSyDJh6w5qry-RtWJoFHA4nbcaORs3D6JFxg",
+              authDomain: "egtazsh2.firebaseapp.com",
+              databaseURL: "https://egtazsh2-default-rtdb.firebaseio.com",
+              projectId: "egtazsh2",
+              storageBucket: "egtazsh2.firebasestorage.app",
+              messagingSenderId: "408813588788",
+              appId: "1:408813588788:web:8729b0681a84fa6964d561"
+        };
 
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
